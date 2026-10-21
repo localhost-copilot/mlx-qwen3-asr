@@ -264,23 +264,24 @@ class Transcriber:
     def transcribe(self, media: Path, targets: Dict[str, Path]) -> Dict[str, Any]:
         self._ensure_loaded()
 
-        last_reported = -1
         started = time.time()
 
         def on_progress(event: Dict[str, Any]) -> None:
-            nonlocal last_reported
             if event.get("event") != "chunk_completed":
                 return
-            percent = int(float(event.get("progress") or 0.0) * 100)
-            if percent < last_reported + 10:
-                return
-            last_reported = percent
+            percent = float(event.get("progress") or 0.0) * 100.0
             processed = float(event.get("processed_audio_sec") or 0.0)
             total = float(event.get("audio_duration_sec") or 0.0)
             elapsed = time.time() - started
+            rate = processed / elapsed if elapsed > 0 else 0.0
+            remaining = (total - processed) / rate if rate > 0 else 0.0
+            chunk = int(event.get("chunk_index") or 0)
+            chunks = int(event.get("total_chunks") or 0)
             _log(
-                f"  {percent:3d}% · 音频 {_human_duration(processed)}/"
-                f"{_human_duration(total)} · 已用 {_human_duration(elapsed)}",
+                f"  {percent:3.0f}% · 音频 {_human_duration(processed)}/"
+                f"{_human_duration(total)} · 已用 {_human_duration(elapsed)}"
+                f" · {rate:.1f}x · 预计剩余 {_human_duration(remaining)}"
+                f" · chunk {chunk}/{chunks}",
                 log_file=self.log_file,
             )
 
